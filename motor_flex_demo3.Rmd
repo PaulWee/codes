@@ -1,0 +1,154 @@
+---
+title: "French Motor in Flexdashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    source_code: embed
+runtime: shiny 
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(plotly)
+library(tidyverse)
+library(tibble)
+library(readxl)
+```
+
+```{r}
+dir <- "C:/Users/Admin/Documents/00 - Actuarial/00 - IOA Data Science/data"
+setwd(dir)
+```
+
+```{r}
+setwd(dir)
+
+data_freq <- read.csv("freMTPL2freq.csv", stringsAsFactors = FALSE, header = TRUE)
+data_region <- read_excel("regions.xlsx", sheet = "region")
+
+data <- data_freq %>% 
+  left_join(x=data_freq,y=data_region,by=c("Region"="region"))
+
+```
+
+```{r}
+
+df1 <- data %>%
+  group_by(DrivAge,Region,region_name, VehGas, VehPower, VehAge, Area) %>%
+  summarise(freq=sum(ClaimNb),
+            exposure = sum(Exposure))
+
+df1b <- df1 %>% 
+  group_by(region_name) %>%
+  summarise(freq=sum(freq)) %>%
+  arrange(desc(freq))
+
+df2 <- data %>%
+  group_by(DrivAge,Region,region_name, VehGas, Area) %>%
+  #group_by(Area) %>%
+  summarise(freq=sum(ClaimNb),
+            avg_exp = mean(Exposure))
+
+
+```
+
+
+
+
+Main Tab
+==========================
+
+Inputs {.sidebar}
+-------------------------
+
+```{r}
+sliderInput('sampleSize', 'Sample Size', min=1, max=nrow(data),
+            value=min(1000, nrow(data)), step=500, round=0)
+
+checkboxInput('jitter', 'Jitter', value = TRUE)
+checkboxInput('smooth', 'Smooth', value = TRUE)
+
+selectInput('x', 'X', names(data))
+selectInput('y', 'Y', names(data), names(data)[[2]])
+selectInput('color', 'Color', c('None', names(data)))
+
+facet.variables = c("Area", "VehGas", "VehBrand", "region_name")
+selectInput('facet_row', 'Facet Row', c(None=".",facet.variables))
+selectInput('facet_col', 'Facet Col', c(None=".",facet.variables))
+
+```
+
+Outputs
+-----------------------------------------------------------------------
+
+### French Motor
+```{r}
+dataset <- reactive({
+  data[sample(nrow(data), input$sampleSize),]
+})
+
+renderPlot({
+  p <- ggplot(dataset(), aes_string(x=input$x, y=input$y)) + geom_point()
+  
+  if (input$color != 'None')
+    p <- p + aes_string(color=input$color)
+  
+  facets <- paste(input$facet_row, '~', input$facet_col)
+  if (facets != '. ~ .')
+    p <- p + facet_grid(facets)
+  
+  if (input$jitter)
+    p <- p + geom_jitter()
+  if (input$smooth)
+    p <- p + geom_smooth()
+  
+  print(p)
+})
+
+
+```
+
+
+
+Summary Exploratory Data Analysis
+=======================
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+### Chart 1
+```{r}
+
+ggplot(data,aes(ClaimNb,VehAge))+
+  geom_point()+
+  ggtitle("Claim Numbers vs Vehicle Age")
+
+
+```
+
+### Chart 2
+```{r}
+plot_ly(data=df2,x=~freq,y=~avg_exp, type="scatter") %>%
+  layout(title="Claim Frequency vs Exposures",
+         xaxis=list(title="Accident Frequency"),
+         yaxis=list(title="Average Exposures"))
+
+```
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Chart 3
+```{r}
+freq <- ggplot(data=df1b,mapping=aes(x=reorder(region_name,freq),y=freq))+
+  geom_bar(stat="identity", fill="blue")+
+  coord_flip()+
+  labs(title="Frequency by Region", subtitle="Draft")+
+  xlab("Region")+
+  ylab("Claim Numbers")+
+  theme_classic()
+
+ggplotly(freq)
+```
+

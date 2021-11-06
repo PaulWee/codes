@@ -1,0 +1,80 @@
+---
+title: "Flexdashboard mtcars"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    source_code: embed
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(tibble)
+library(data.table)
+library(readxl)
+```
+
+```{r}
+df <- mtcars
+```
+
+
+Main Tab
+==========================
+
+Inputs {.sidebar}
+-------------------------
+
+```{r}
+sliderInput('sampleSize', 'Sample Size', min=1, max=nrow(df),
+            value=min(30, nrow(df)), step=500, round=0)
+
+checkboxInput('jitter', 'Jitter', value = TRUE)
+checkboxInput('smooth', 'Smooth', value = TRUE)
+
+selectInput('x', 'X', names(df))
+selectInput('y', 'Y', names(df), names(df)[[2]])
+selectInput('color', 'Color', c('None', names(df)))
+selectInput('size', 'Size', c('None', names(df)))
+
+facet.variables = c("cyl", "vs", "gear", "carb")
+selectInput('facet_row', 'Facet Row', c(None=".",facet.variables))
+selectInput('facet_col', 'Facet Col', c(None=".",facet.variables))
+```
+
+
+Outputs
+-------------------------
+### Result
+
+```{r}
+dataset <- reactive({
+  df[sample(nrow(df), input$sampleSize),]
+})
+
+
+renderPlot({
+  p <- ggplot(dataset(), aes_string(x=input$x, y=input$y)) + geom_point()
+  
+  if (input$color != 'None')
+    p <- p + aes_string(color=input$color)
+  
+  if (input$size != 'None')
+    p <- p + aes_string(size=input$size)
+  
+  facets <- paste(input$facet_row, '~', input$facet_col)
+  if (facets != '. ~ .')
+    p <- p + facet_grid(facets)
+  
+  if (input$jitter)
+    p <- p + geom_jitter()
+  if (input$smooth)
+    p <- p + geom_smooth()
+  
+  print(p)
+})
+```
+
